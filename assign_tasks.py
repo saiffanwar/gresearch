@@ -60,6 +60,34 @@ def assign_tasks(factor, arrival, bonus, reward, duration, time_bonus):
 
         return compatibility_matrix
 
+    def is_terminal(state):
+        for a in state:
+            if a[0] is None:
+                return False
+        return True
+
+    def take_action(action, state):
+        state[action[0]] = (0, action[1])
+        return state
+
+    def get_possible_actions(state):
+        tasks = [i for i, x in enumerate(state) if x[0] is not None]
+        if len([x for x in state if x[0] is not None]) == 0:
+            current_time = min(arrival)
+        else:
+            times = [x[1] for x in state if x[0] is not None]
+            max_time_task = tasks[np.argmax(times)]
+            current_time = max(times) + duration[max_time_task]
+        possible_actions = []
+        while len(possible_actions) == 0:
+            for i in range(num_tasks):
+                if arrival[i] <= current_time:
+                    if i not in tasks:
+                        print(i, current_time)
+                        possible_actions.append((i, current_time))
+            current_time += 1
+        print(possible_actions)
+        return possible_actions
 
     class TreeNode:
         def __init__(self, schedule, parent=None):
@@ -93,33 +121,6 @@ def assign_tasks(factor, arrival, bonus, reward, duration, time_bonus):
             self.visits += 1
             self.value += score
 
-    def is_terminal(state):
-        for a in state:
-            if a[0] is None:
-                return False
-        return True
-
-    def take_action(action, state):
-        state[action[0]] = (0, action[1])
-        return state
-
-    def get_possible_actions(state):
-        if len([x for x in state if x[0] is not None]) == 0:
-            current_time = min(arrival)
-        else:
-            tasks = [i for i, x in enumerate(state) if x[0] is not None]
-            times = [x[1] for x in state if x[0] is not None]
-            max_time_task = tasks[np.argmax(times)]
-            current_time = max(times) + duration[max_time_task]
-        possible_actions = []
-        existing_tasks = [i for i, x in enumerate(state) if x[0] is not None]
-        while len(possible_actions) == 0:
-            for i in range(num_tasks):
-                if arrival[i] <= current_time:
-                    if i not in existing_tasks:
-                        possible_actions.append((i, current_time))
-            current_time += 1
-        return possible_actions
 
     class MCTS:
         def __init__(self, root):
@@ -136,15 +137,17 @@ def assign_tasks(factor, arrival, bonus, reward, duration, time_bonus):
             return random.choice(node.children)
 
         def simulate(self, node):
-            current_state = node.state
-            while not is_terminal(current_state):
-                actions = get_possible_actions(current_state)
-                action = random.choice(actions)
-                current_state = take_action(action, current_state)
-            print(is_valid_schedule(current_state))
-            simulated_score = self.schedule_score_func(current_state)
+            valid_schedule = False
+            while not valid_schedule:
+                current_state = node.state.copy()
+                while not is_terminal(current_state):
+                    actions = get_possible_actions(current_state)
+                    print(actions)
+                    action = random.choice(actions)
+                    current_state = take_action(action, current_state)
+                valid_schedule = is_valid_schedule(current_state)
+                simulated_score = self.schedule_score_func(current_state)
 #            print(current_state)
-#            print(simulated_score)
             return simulated_score
 
         def backpropagate(self, node, score):
@@ -177,21 +180,22 @@ def assign_tasks(factor, arrival, bonus, reward, duration, time_bonus):
             return score
 
     def is_valid_schedule(schedule):
+#        print(schedule)
     # sort a list of tuples by the second element in each tuple and return the indexes
         task_indices = [i[0] for i in sorted(enumerate(schedule), key=lambda x:x[1][1])]
-        print(task_indices)
+#        print(task_indices)
+        print([( schedule[i], duration[i] ) for i in task_indices])
 
         for i in range(num_tasks):
             for j in range(i+1, num_tasks):
                 if schedule[task_indices[i]][1] + duration[task_indices[i]] > schedule[task_indices[j]][1]:
-                    print("Invalid schedule")
                     return False
         return True
 
 
     root = TreeNode(schedule)
     mcts = MCTS(root)
-    mcts.run(1000)
+    mcts.run(100000)
     best_action = mcts.best_action()
 
 
